@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ParkBot — ISU Parking</title>
+  <style>
+    :root {
+      --red: #C8102E;
+      --gold: #F1BE48;
+      --dark: #1a1a1a;
+      --bg: #f0f0f0;
+      --panel: #ffffff;
+      --border: #e0e0e0;
+      --text: #222;
+      --muted: #777;
+      --logbg: #1b1e23;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      font-size: 14px;
+    }
+
+    /* ── Header ── */
+    header {
+      background: var(--red);
+      color: white;
+      padding: 10px 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+    header .brand { font-size: 1.1rem; font-weight: 700; letter-spacing: -0.02em; }
+    header .tagline { font-size: 0.72rem; opacity: 0.75; margin-top: 1px; }
+    .badge {
+      padding: 3px 10px;
+      border-radius: 10px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      background: rgba(255,255,255,0.15);
+      letter-spacing: 0.03em;
+    }
+    .badge.running { background: #27ae60; }
+    .badge.locked  { background: var(--gold); color: var(--dark); }
+
+    /* ── Layout ── */
+    .body { display: flex; flex: 1; overflow: hidden; }
+
+    /* ── Sidebar ── */
+    aside {
+      width: 310px;
+      background: var(--panel);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      overflow-y: auto;
+    }
+
+    .section {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    .section-title {
+      font-size: 0.65rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--muted);
+      margin-bottom: 11px;
+    }
+    .field { margin-bottom: 10px; }
+    .field:last-child { margin-bottom: 0; }
+    label.lbl {
+      display: block;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: #555;
+      margin-bottom: 4px;
+    }
+    input[type=text], input[type=password], input[type=email] {
+      width: 100%;
+      padding: 6px 9px;
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      font-size: 0.82rem;
+      background: #fafafa;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    input:focus { outline: none; border-color: var(--red); background: white; }
+    .hint { font-size: 0.68rem; color: #aaa; margin-top: 3px; }
+
+    .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
+    .check-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+    }
+    .check-row input[type=checkbox] {
+      width: 15px; height: 15px;
+      accent-color: var(--red);
+      cursor: pointer;
+    }
+    .check-row span { font-size: 0.82rem; }
+
+    /* ── Sidebar footer buttons ── */
+    .sidebar-footer {
+      padding: 12px 16px;
+      border-top: 1px solid var(--border);
+      margin-top: auto;
+      display: flex;
+      gap: 8px;
+    }
+
+    /* ── Log panel ── */
+    .logpanel {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      background: var(--logbg);
+    }
+    .log-toolbar {
+      background: #252830;
+      padding: 8px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid #333;
+      flex-shrink: 0;
+    }
+    .log-toolbar span {
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #888;
+    }
+    #log {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px 16px;
+      font-family: 'SF Mono', 'Menlo', 'Cascadia Code', 'Consolas', monospace;
+      font-size: 0.78rem;
+      line-height: 1.65;
+      color: #c9d1d9;
+    }
+    .log-line { display: block; white-space: pre-wrap; word-break: break-all; }
+    .log-line.err { color: #f97583; }
+    .log-line.ok  { color: #85e89d; }
+    .log-line.info { color: #79b8ff; }
+    .log-line.dim  { color: #586069; }
+
+    .log-actions {
+      padding: 10px 16px;
+      background: #252830;
+      border-top: 1px solid #333;
+      display: flex;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    /* ── Buttons ── */
+    .btn {
+      padding: 7px 14px;
+      border: none;
+      border-radius: 5px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: filter 0.15s;
+      white-space: nowrap;
+    }
+    .btn:hover:not(:disabled) { filter: brightness(0.9); }
+    .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+    .btn-run  { background: var(--red); color: white; flex: 1; }
+    .btn-stop { background: #e74c3c; color: white; }
+    .btn-save { background: #2d6a4f; color: white; flex: 1; }
+    .btn-sm   { background: #e0e0e0; color: #333; padding: 4px 9px; font-size: 0.72rem; }
+    .btn-unlock { background: var(--gold); color: var(--dark); }
+
+    /* ── Lock warning ── */
+    #lockBanner {
+      display: none;
+      background: #fff3cd;
+      border-bottom: 1px solid #ffc107;
+      padding: 7px 16px;
+      font-size: 0.78rem;
+      color: #856404;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      flex-shrink: 0;
+    }
+    #lockBanner.show { display: flex; }
+
+    ::-webkit-scrollbar { width: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #444; border-radius: 3px; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div>
+    <div class="brand">🚗 ParkBot</div>
+    <div class="tagline">Iowa State University — Parking Permit Automation</div>
+  </div>
+  <span id="badge" class="badge">Idle</span>
+</header>
+
+<div id="lockBanner">
+  ⚠ purchased.lock exists — this permit has already been purchased.
+  <button class="btn btn-sm btn-unlock" onclick="unlock()">Remove Lock</button>
+</div>
+
+<div class="body">
+
+  <!-- ── Config Sidebar ── -->
+  <aside>
+    <form id="form" onsubmit="saveConfig(event)">
+
+      <div class="section">
+        <div class="section-title">Permit Selection</div>
+        <div class="field">
+          <label class="lbl" for="permit_keyword">Permit Keyword <span style="color:#c00">*</span></label>
+          <input type="text" id="permit_keyword" placeholder="e.g. MOTORCYCLE" required>
+          <div class="hint">Case-insensitive match against permit name</div>
+        </div>
+        <div class="field">
+          <label class="lbl" for="vehicle_keyword">Vehicle Keyword</label>
+          <input type="text" id="vehicle_keyword" placeholder="e.g. NXU729 — empty = first">
+          <div class="hint">License plate or description substring</div>
+        </div>
+        <div class="field">
+          <label class="lbl" for="address_keyword">Address Keyword</label>
+          <input type="text" id="address_keyword" placeholder="e.g. HELSER — empty = first">
+          <div class="hint">Matches your registered address</div>
+        </div>
+        <div class="field">
+          <label class="lbl" for="email">Receipt Email</label>
+          <input type="email" id="email" placeholder="Optional — uses portal email if empty">
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Billing</div>
+        <div class="field">
+          <label class="lbl" for="card_number">Card Number <span style="color:#c00">*</span></label>
+          <input type="text" id="card_number" placeholder="4111 1111 1111 1111" autocomplete="off" required>
+        </div>
+        <div class="row2">
+          <div class="field">
+            <label class="lbl" for="expiry">Expiry <span style="color:#c00">*</span></label>
+            <input type="text" id="expiry" placeholder="MM/YY" required>
+          </div>
+          <div class="field">
+            <label class="lbl" for="cvv">CVV <span style="color:#c00">*</span></label>
+            <input type="password" id="cvv" placeholder="123" autocomplete="off" required>
+          </div>
+        </div>
+        <div class="row2">
+          <div class="field">
+            <label class="lbl" for="billing_name">Name on Card</label>
+            <input type="text" id="billing_name" placeholder="First Last">
+          </div>
+          <div class="field">
+            <label class="lbl" for="zip">Billing ZIP</label>
+            <input type="text" id="zip" placeholder="50011">
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Options</div>
+        <div class="field">
+          <label class="check-row">
+            <input type="checkbox" id="one_time">
+            <span>One-time guard (blocks re-purchase)</span>
+          </label>
+          <div class="hint" style="margin-top:6px">Writes purchased.lock after success</div>
+        </div>
+        <div class="field" style="margin-top:8px">
+          <label class="lbl" for="chrome_profile">Chrome Profile Path</label>
+          <input type="text" id="chrome_profile" placeholder="Auto-detected if empty">
+          <div class="hint">Default: your system Chrome profile</div>
+        </div>
+      </div>
+
+      <div class="sidebar-footer">
+        <button type="submit" class="btn btn-save">Save Config</button>
+      </div>
+    </form>
+  </aside>
+
+  <!-- ── Log Panel ── -->
+  <div class="logpanel">
+    <div class="log-toolbar">
+      <span>Live Output</span>
+      <button class="btn btn-sm" onclick="clearLog()" style="background:#333;color:#aaa">Clear</button>
+    </div>
+    <div id="log"></div>
+    <div class="log-actions">
+      <button id="runBtn" class="btn btn-run" onclick="runBot()">▶ Run Bot</button>
+      <button id="stopBtn" class="btn btn-stop" onclick="stopBot()" style="display:none">■ Stop</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  let es = null;
+
+  // ── Load config ──────────────────────────────────────────────
+  async function loadConfig() {
+    const res = await fetch('/config');
+    const c = await res.json();
+    f('permit_keyword').value  = c.permit_keyword  || '';
+    f('vehicle_keyword').value = c.vehicle_keyword || '';
+    f('address_keyword').value = c.address_keyword || '';
+    f('email').value           = c.email           || '';
+    f('one_time').checked      = !!c.one_time;
+    f('chrome_profile').value  = c.chrome_profile  || '';
+    f('card_number').value     = c.billing?.card_number || '';
+    f('expiry').value          = c.billing?.expiry      || '';
+    f('cvv').value             = c.billing?.cvv         || '';
+    f('billing_name').value    = c.billing?.name        || '';
+    f('zip').value             = c.billing?.zip         || '';
+  }
+
+  // ── Save config ──────────────────────────────────────────────
+  async function saveConfig(e) {
+    e.preventDefault();
+    const cfg = {
+      permit_keyword:  f('permit_keyword').value.trim(),
+      vehicle_keyword: f('vehicle_keyword').value.trim(),
+      address_keyword: f('address_keyword').value.trim(),
+      email:           f('email').value.trim(),
+      one_time:        f('one_time').checked,
+      chrome_profile:  f('chrome_profile').value.trim(),
+      billing: {
+        card_number: f('card_number').value.replace(/\s/g,''),
+        expiry:      f('expiry').value.trim(),
+        cvv:         f('cvv').value.trim(),
+        name:        f('billing_name').value.trim(),
+        zip:         f('zip').value.trim(),
+      }
+    };
+    const res = await fetch('/config', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(cfg)
+    });
+    if (res.ok) {
+      log('✓ Config saved.', 'ok');
+    } else {
+      log('✗ Save failed: ' + (await res.text()), 'err');
+    }
+  }
+
+  // ── Run / Stop ───────────────────────────────────────────────
+  async function runBot() {
+    const res = await fetch('/run', { method: 'POST' });
+    if (!res.ok) {
+      log('✗ ' + (await res.text()), 'err');
+      return;
+    }
+    setRunning(true);
+  }
+
+  async function stopBot() {
+    const res = await fetch('/stop', { method: 'POST' });
+    if (!res.ok) log('Stop: ' + (await res.text()), 'err');
+  }
+
+  async function unlock() {
+    const res = await fetch('/unlock', { method: 'POST' });
+    if (res.ok) {
+      setLocked(false);
+      log('✓ Lock file removed — bot can run again.', 'ok');
+    }
+  }
+
+  // ── SSE connection ───────────────────────────────────────────
+  function connect() {
+    if (es) { es.close(); }
+    es = new EventSource('/events');
+
+    es.onmessage = (e) => {
+      let d;
+      try { d = JSON.parse(e.data); } catch { return; }
+
+      if (d.type === 'connected') {
+        setLocked(d.locked);
+        setRunning(d.running);
+        return;
+      }
+      if (d.type === 'done') {
+        setRunning(false);
+        return;
+      }
+      if (d.type === 'log' && d.msg) {
+        const msg = d.msg.replace(/\n$/, '');
+        if (!msg) return;
+        const low = msg.toLowerCase();
+        let cls = '';
+        if (low.includes('[debug]')) cls = 'dim';
+        else if (low.includes('error') || low.includes('failed') || low.includes('✗')) cls = 'err';
+        else if (low.includes('confirmed') || low.includes('success') || low.includes('done') || low.includes('✓')) cls = 'ok';
+        else if (low.includes('warn') || low.includes('tip:')) cls = 'info';
+        log(msg, cls);
+      }
+    };
+
+    es.onerror = () => {
+      // Auto-reconnect after 2s
+      es.close(); es = null;
+      setTimeout(connect, 2000);
+    };
+  }
+
+  // ── UI helpers ───────────────────────────────────────────────
+  function setRunning(on) {
+    document.getElementById('runBtn').style.display  = on ? 'none' : 'flex';
+    document.getElementById('stopBtn').style.display = on ? 'inline-flex' : 'none';
+    const badge = document.getElementById('badge');
+    badge.textContent = on ? '● Running' : 'Idle';
+    badge.className   = 'badge' + (on ? ' running' : '');
+  }
+
+  function setLocked(on) {
+    document.getElementById('lockBanner').classList.toggle('show', on);
+  }
+
+  function log(msg, cls) {
+    const el = document.getElementById('log');
+    const line = document.createElement('span');
+    line.className = 'log-line' + (cls ? ' ' + cls : '');
+    line.textContent = msg;
+    el.appendChild(line);
+    el.appendChild(document.createElement('br'));
+    // Auto-scroll only if already near the bottom
+    if (el.scrollHeight - el.scrollTop - el.clientHeight < 80) {
+      el.scrollTop = el.scrollHeight;
+    }
+  }
+
+  function clearLog() { document.getElementById('log').innerHTML = ''; }
+
+  function f(id) { return document.getElementById(id); }
+
+  // ── Init ─────────────────────────────────────────────────────
+  loadConfig();
+  connect();
+
+  log('ParkBot GUI ready. Configure your settings and click Run Bot.', 'info');
+  log('Make sure Chrome is fully quit before running (session cookies are preserved).', 'dim');
+</script>
+</body>
+</html>
