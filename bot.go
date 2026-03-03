@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"runtime"
 	"strings"
 	"time"
 
@@ -52,14 +53,24 @@ func runBot(ctx context.Context, cfg *Config) error {
 
 	url, err := l.Launch()
 	if err != nil {
-		return fmt.Errorf("launching Chrome: %w\n\nTip: fully quit Chrome (Cmd+Q) and re-run — your login session is saved in the profile and will be reused automatically", err)
+		return fmt.Errorf("launching Chrome: %w\n\nTip: fully quit Chrome (%s) and re-run — your login session is saved in the profile and will be reused automatically", err, chromeQuitHint())
 	}
 
-	browser := rod.New().ControlURL(url).Context(ctx).MustConnect()
+	browser := rod.New().ControlURL(url).Context(ctx)
+	if err := browser.Connect(); err != nil {
+		return fmt.Errorf("connecting to Chrome: %w", err)
+	}
 	defer browser.Close()
 
-	page := browser.MustPage(portalURL)
-	page.MustSetViewport(1280, 900, 1, false)
+	page, err := browser.Page(proto.TargetCreateTarget{URL: portalURL})
+	if err != nil {
+		return fmt.Errorf("opening portal page: %w", err)
+	}
+	if err := page.SetViewport(&proto.EmulationSetDeviceMetricsOverride{
+		Width: 1280, Height: 900, DeviceScaleFactor: 1,
+	}); err != nil {
+		log.Printf("WARNING: could not set viewport: %v", err)
+	}
 
 	// Screenshot helper on error
 	var lastErr error
@@ -74,7 +85,9 @@ func runBot(ctx context.Context, cfg *Config) error {
 
 	// Step 4: wait for page to finish loading, then log where we landed.
 	log.Println("Waiting for portal page to load...")
-	page.MustWaitLoad()
+	if err := page.WaitLoad(); err != nil {
+		return fmt.Errorf("waiting for portal page load: %w", err)
+	}
 	info, _ := page.Info()
 	log.Printf("Page URL: %s", info.URL)
 	log.Printf("Page title: %s", info.Title)
@@ -84,7 +97,9 @@ func runBot(ctx context.Context, cfg *Config) error {
 	log.Println("Looking for 'Request New Permit' link (up to 15s for AJAX to render)...")
 	if clicked := clickRequestPermit(page, 15*time.Second); clicked {
 		log.Println("Clicked 'Request New Permit' — waiting for purchase page to load...")
-		page.MustWaitLoad()
+		if err := page.WaitLoad(); err != nil {
+			return fmt.Errorf("waiting for purchase page load: %w", err)
+		}
 		info, _ = page.Info()
 		log.Printf("After click — URL: %s", info.URL)
 		// Wait for page to settle after navigation
@@ -434,7 +449,7 @@ func goToCheckout(page *rod.Page, email string) error {
 		return fmt.Errorf("no Cart link found in header — %s", val)
 	}
 	time.Sleep(2 * time.Second)
-	page.MustWaitLoad()
+	_ = page.WaitLoad()
 	info, _ := page.Info()
 	log.Printf("  Cart page URL: %s", info.URL)
 
@@ -547,7 +562,7 @@ func goToCheckout(page *rod.Page, email string) error {
 
 	// Wait for payment processor page to load
 	time.Sleep(3 * time.Second)
-	page.MustWaitLoad()
+	_ = page.WaitLoad()
 	info, _ = page.Info()
 	log.Printf("  Payment page URL: %s", info.URL)
 
@@ -938,4 +953,16 @@ func truncate(s string, n int) string {
 		return s
 	}
 	return s[:n] + "..."
+}
+
+// chromeQuitHint returns a platform-specific hint for quitting Chrome.
+func chromeQuitHint() string {
+	switch runtime.GOOS {
+	case "darwin":
+		return "Cmd+Q"
+	case "windows":
+		return "Alt+F4 or close all windows"
+	default: // linux and others
+		return "Ctrl+Q or close all windows"
+	}
 }
