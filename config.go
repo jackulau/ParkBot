@@ -79,6 +79,32 @@ func (c *Config) Save(path string) error {
 	return nil
 }
 
+// defaultConfigDir returns the platform-specific configuration directory for
+// ParkBot. On Linux, it respects the XDG Base Directory specification by using
+// XDG_CONFIG_HOME if set, falling back to ~/.config/parkbot.
+func defaultConfigDir() string {
+	home, _ := os.UserHomeDir()
+	switch runtime.GOOS {
+	case "linux":
+		base := os.Getenv("XDG_CONFIG_HOME")
+		if base == "" {
+			base = filepath.Join(home, ".config")
+		}
+		return filepath.Join(base, "parkbot")
+	case "windows":
+		if appData := os.Getenv("APPDATA"); appData != "" {
+			return filepath.Join(appData, "ParkBot")
+		}
+		return filepath.Join(home, "AppData", "Roaming", "ParkBot")
+	default: // darwin
+		return filepath.Join(home, "Library", "Application Support", "ParkBot")
+	}
+}
+
+// defaultChromeProfile returns the default Chrome/Chromium user data directory
+// for the current platform. On Linux, it checks for Chrome, Chromium, Snap, and
+// Flatpak installations in order of preference, returning the first path that
+// exists on disk. This handles the variety of browser packaging on Linux.
 func defaultChromeProfile() string {
 	home, _ := os.UserHomeDir()
 	switch runtime.GOOS {
@@ -88,8 +114,37 @@ func defaultChromeProfile() string {
 		}
 		return filepath.Join(home, "AppData", "Local", "Google", "Chrome", "User Data", "Default")
 	case "linux":
-		return filepath.Join(home, ".config", "google-chrome", "Default")
+		return linuxChromeProfile(home)
 	default: // darwin
 		return filepath.Join(home, "Library", "Application Support", "Google", "Chrome", "Default")
 	}
+}
+
+// linuxChromeProfile checks multiple well-known Chrome/Chromium profile
+// locations on Linux. Returns the first path that exists, or falls back to the
+// standard google-chrome location. Checked paths (in order):
+//  1. ~/.config/google-chrome/Default          (standard Chrome)
+//  2. ~/.config/chromium/Default               (Chromium)
+//  3. ~/snap/chromium/common/chromium/Default   (Snap Chromium)
+//  4. ~/.var/app/com.google.Chrome/config/google-chrome/Default (Flatpak Chrome)
+func linuxChromeProfile(home string) string {
+	configBase := os.Getenv("XDG_CONFIG_HOME")
+	if configBase == "" {
+		configBase = filepath.Join(home, ".config")
+	}
+
+	candidates := []string{
+		filepath.Join(configBase, "google-chrome", "Default"),
+		filepath.Join(configBase, "chromium", "Default"),
+		filepath.Join(home, "snap", "chromium", "common", "chromium", "Default"),
+		filepath.Join(home, ".var", "app", "com.google.Chrome", "config", "google-chrome", "Default"),
+	}
+
+	for _, path := range candidates {
+		if _, err := os.Stat(path); err == nil {
+			return path
+		}
+	}
+	// Default fallback: standard Chrome path even if it doesn't exist yet
+	return filepath.Join(configBase, "google-chrome", "Default")
 }
