@@ -146,8 +146,44 @@ func chromeProfileForOS(goos string) string {
 		}
 		return filepath.Join(home, "AppData", "Local", "Google", "Chrome", "User Data", "Default")
 	case "linux":
-		return filepath.Join(home, ".config", "google-chrome", "Default")
+		return linuxChromeProfile(home)
 	default: // darwin
 		return filepath.Join(home, "Library", "Application Support", "Google", "Chrome", "Default")
 	}
+}
+
+// linuxChromeProfile checks multiple well-known Chrome/Chromium profile
+// locations on Linux. Returns the first path that exists, or falls back to the
+// standard google-chrome location. Checked paths (in order):
+//  1. ~/.config/google-chrome/Default          (standard Chrome)
+//  2. ~/.config/chromium/Default               (Chromium)
+//  3. ~/snap/chromium/common/chromium/Default   (Snap Chromium)
+//  4. ~/.var/app/com.google.Chrome/config/google-chrome/Default (Flatpak Chrome)
+func linuxChromeProfile(home string) string {
+	configBase := os.Getenv("XDG_CONFIG_HOME")
+	if configBase == "" {
+		configBase = filepath.Join(home, ".config")
+	}
+
+	candidates := []string{
+		filepath.Join(configBase, "google-chrome", "Default"),
+		filepath.Join(configBase, "chromium", "Default"),
+		filepath.Join(home, "snap", "chromium", "common", "chromium", "Default"),
+		filepath.Join(home, ".var", "app", "com.google.Chrome", "config", "google-chrome", "Default"),
+	}
+
+	for _, path := range candidates {
+		if _, err := os.Stat(path); err == nil {
+			return path
+		}
+	}
+	// Default fallback: standard Chrome path even if it doesn't exist yet
+	return filepath.Join(configBase, "google-chrome", "Default")
+}
+
+// NormalizePath converts a user-supplied path to use OS-specific separators.
+// On Windows, forward slashes in paths are replaced with backslashes.
+// This ensures paths entered in the GUI or config file work correctly.
+func NormalizePath(p string) string {
+	return filepath.FromSlash(p)
 }

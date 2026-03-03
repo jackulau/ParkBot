@@ -89,12 +89,32 @@ func TestISUThemeSizes(t *testing.T) {
 				}
 			})
 		}
+	} else if runtime.GOOS == "linux" {
+		// On Linux, padding should be slightly larger than default
+		defaultPad := theme.DefaultTheme().Size(theme.SizeNamePadding)
+		got := th.Size(theme.SizeNamePadding)
+		if got != defaultPad+1 {
+			t.Errorf("linux Size(padding) = %f, want %f", got, defaultPad+1)
+		}
+		// Text size should fall through to default on Linux
+		defaultText := theme.DefaultTheme().Size(theme.SizeNameText)
+		gotText := th.Size(theme.SizeNameText)
+		if gotText != defaultText {
+			t.Errorf("linux Size(text) = %f, want default %f", gotText, defaultText)
+		}
+	} else if runtime.GOOS == "windows" {
+		// On Windows, padding should be slightly larger than default
+		defaultPad := theme.DefaultTheme().Size(theme.SizeNamePadding)
+		got := th.Size(theme.SizeNamePadding)
+		if got != defaultPad+1 {
+			t.Errorf("windows Size(padding) = %f, want %f", got, defaultPad+1)
+		}
 	} else {
-		// On non-macOS, all sizes should fall through to default theme.
+		// On other platforms, all sizes should fall through to default theme.
 		defaultSize := theme.DefaultTheme().Size(theme.SizeNameText)
 		got := th.Size(theme.SizeNameText)
 		if got != defaultSize {
-			t.Errorf("non-darwin Size(text) = %f, want default %f", got, defaultSize)
+			t.Errorf("other-platform Size(text) = %f, want default %f", got, defaultSize)
 		}
 	}
 }

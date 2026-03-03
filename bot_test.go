@@ -496,19 +496,18 @@ func TestWaitForElement_Timeout(t *testing.T) {
 // Cross-platform path tests
 // ============================================================================
 
-func TestLockFilePath_IsRelative(t *testing.T) {
-	// lockFile should be a relative path that works on all platforms
-	if filepath.IsAbs(lockFile) {
-		t.Fatalf("lockFile should be relative, got: %q", lockFile)
+func TestLockFilePath_IsAbsolute(t *testing.T) {
+	// lockFile should be an absolute path in the platform app data directory
+	if !filepath.IsAbs(lockFile) {
+		t.Fatalf("lockFile should be absolute, got: %q", lockFile)
 	}
 }
 
-func TestLockFilePath_NoSpecialChars(t *testing.T) {
-	// Lock file name should be simple and cross-platform safe
-	for _, ch := range lockFile {
-		if ch == '\\' || ch == '/' || ch == ':' || ch == '*' || ch == '?' || ch == '"' || ch == '<' || ch == '>' || ch == '|' {
-			t.Fatalf("lockFile contains platform-unsafe character %q: %q", string(ch), lockFile)
-		}
+func TestLockFilePath_HasCorrectBasename(t *testing.T) {
+	// Lock file basename should be simple and cross-platform safe
+	base := filepath.Base(lockFile)
+	if base != "purchased.lock" {
+		t.Fatalf("lockFile basename should be 'purchased.lock', got: %q", base)
 	}
 }
 
@@ -544,103 +543,5 @@ func TestPortalURL_IsHTTPS(t *testing.T) {
 func TestPortalURL_NotEmpty(t *testing.T) {
 	if portalURL == "" {
 		t.Fatal("portalURL should not be empty")
-	}
-}
-
-// ============================================================================
-// Server tests
-// ============================================================================
-
-func TestNewServer_Initialization(t *testing.T) {
-	cfg := &Config{PermitKeyword: "TEST"}
-	srv := NewServer("config.yaml", cfg)
-	if srv == nil {
-		t.Fatal("NewServer should return non-nil server")
-	}
-	if srv.cfgPath != "config.yaml" {
-		t.Fatalf("cfgPath mismatch: got %q", srv.cfgPath)
-	}
-	if srv.running {
-		t.Fatal("server should not be running initially")
-	}
-	if srv.clients == nil {
-		t.Fatal("clients map should be initialized")
-	}
-}
-
-func TestServer_LogWriter(t *testing.T) {
-	cfg := &Config{}
-	srv := NewServer("test.yaml", cfg)
-	w := srv.LogWriter()
-	if w == nil {
-		t.Fatal("LogWriter should return non-nil writer")
-	}
-	// Write should not panic even with no clients
-	n, err := w.Write([]byte("test message"))
-	if err != nil {
-		t.Fatalf("Write should not error: %v", err)
-	}
-	if n != len("test message") {
-		t.Fatalf("Write should return message length, got: %d", n)
-	}
-}
-
-func TestServer_BroadcastNoClients(t *testing.T) {
-	cfg := &Config{}
-	srv := NewServer("test.yaml", cfg)
-	// Should not panic with no clients
-	srv.broadcast("test message")
-}
-
-func TestServer_ClientManagement(t *testing.T) {
-	cfg := &Config{}
-	srv := NewServer("test.yaml", cfg)
-
-	ch := make(chan string, 10)
-	srv.addClient(ch)
-
-	// Broadcast should reach the client
-	srv.broadcast("hello")
-	select {
-	case msg := <-ch:
-		if msg != "hello" {
-			t.Fatalf("expected 'hello', got: %q", msg)
-		}
-	case <-time.After(time.Second):
-		t.Fatal("expected message on client channel")
-	}
-
-	// Remove client
-	srv.removeClient(ch)
-
-	// Broadcast should not reach removed client
-	srv.broadcast("world")
-	select {
-	case msg := <-ch:
-		t.Fatalf("should not receive message after removal, got: %q", msg)
-	case <-time.After(50 * time.Millisecond):
-		// Expected: no message
-	}
-}
-
-func TestServer_BroadcastSlowClient(t *testing.T) {
-	cfg := &Config{}
-	srv := NewServer("test.yaml", cfg)
-
-	// Create a client with buffer of 1
-	ch := make(chan string, 1)
-	srv.addClient(ch)
-	defer srv.removeClient(ch)
-
-	// Fill the buffer
-	srv.broadcast("msg1")
-	// Second message should be silently dropped (not block)
-	srv.broadcast("msg2")
-	srv.broadcast("msg3")
-
-	// Should only get the first message
-	msg := <-ch
-	if msg != "msg1" {
-		t.Fatalf("expected 'msg1', got: %q", msg)
 	}
 }

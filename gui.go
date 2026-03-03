@@ -111,10 +111,13 @@ func (t isuTheme) Color(n fyne.ThemeColorName, v fyne.ThemeVariant) color.Color 
 func (t isuTheme) Font(s fyne.TextStyle) fyne.Resource     { return theme.DefaultTheme().Font(s) }
 func (t isuTheme) Icon(n fyne.ThemeIconName) fyne.Resource { return theme.DefaultTheme().Icon(n) }
 
-// Size returns theme sizes with macOS-specific adjustments for comfortable
-// text readability and touch-friendly spacing on Retina displays.
+// Size returns theme sizes with platform-specific adjustments.
+// macOS: comfortable text readability and touch-friendly spacing on Retina displays.
+// Linux: slightly more padding to compensate for tighter font metrics.
+// Windows: DPI-aware padding to prevent text clipping with ClearType rendering.
 func (t isuTheme) Size(n fyne.ThemeSizeName) float32 {
-	if runtime.GOOS == "darwin" {
+	switch runtime.GOOS {
+	case "darwin":
 		switch n {
 		case theme.SizeNameText:
 			return 14 // default is 13; slightly larger for macOS readability
@@ -135,8 +138,94 @@ func (t isuTheme) Size(n fyne.ThemeSizeName) float32 {
 		case theme.SizeNameInputRadius:
 			return 6 // rounded inputs like macOS
 		}
+	case "linux":
+		base := theme.DefaultTheme().Size(n)
+		switch n {
+		case theme.SizeNamePadding:
+			// Slightly more padding to compensate for tighter font metrics
+			return base + 1
+		case theme.SizeNameInlineIcon:
+			// Ensure inline icons align with text on Linux
+			return base
+		}
+	case "windows":
+		base := theme.DefaultTheme().Size(n)
+		switch n {
+		case theme.SizeNamePadding:
+			// Slightly larger padding on Windows to prevent text clipping
+			return base + 1
+		case theme.SizeNameInlineIcon:
+			// Ensure inline icons don't overlap text on Windows
+			return base + 2
+		case theme.SizeNameScrollBar:
+			// Wider scrollbar for Windows (matches OS conventions)
+			return base + 2
+		case theme.SizeNameScrollBarSmall:
+			return base + 1
+		}
 	}
 	return theme.DefaultTheme().Size(n)
+}
+
+// ─── Linux environment helpers ───────────────────────────────────────────────
+
+// initLinuxEnv sets environment variables needed for correct rendering on Linux.
+// It handles the X11 vs Wayland distinction and sets font-related hints to
+// ensure consistent text rendering regardless of the user's desktop environment.
+func initLinuxEnv() {
+	if runtime.GOOS != "linux" {
+		return
+	}
+
+	// Fyne uses GLFW which supports both X11 and Wayland (via XWayland or native).
+	// If FYNE_SCALE is not set, leave DPI scaling to the toolkit defaults.
+	// Users can override with FYNE_SCALE=1.0 (or any float) if needed.
+
+	// Ensure DISPLAY is set for X11 sessions; Wayland sessions typically set
+	// WAYLAND_DISPLAY. If neither is set, default to :0 for X11 as a fallback.
+	if os.Getenv("DISPLAY") == "" && os.Getenv("WAYLAND_DISPLAY") == "" {
+		os.Setenv("DISPLAY", ":0")
+		log.Println("[gui] Warning: neither DISPLAY nor WAYLAND_DISPLAY set, defaulting DISPLAY=:0")
+	}
+
+	// Log which display server protocol is in use for debugging.
+	if wd := os.Getenv("WAYLAND_DISPLAY"); wd != "" {
+		log.Printf("[gui] Wayland session detected (WAYLAND_DISPLAY=%s)", wd)
+	} else if d := os.Getenv("DISPLAY"); d != "" {
+		log.Printf("[gui] X11 session detected (DISPLAY=%s)", d)
+	}
+}
+
+// ─── Platform-aware sizing helpers ────────────────────────────────────────────
+
+// platformWindowSize returns the initial window size adjusted for the platform.
+// On Linux, uses a slightly smaller default to fit more reliably on smaller
+// screens and tiling window managers. On Windows, uses slightly larger base
+// dimensions so form fields are not cramped at 100% scaling on 1080p.
+func platformWindowSize() fyne.Size {
+	switch runtime.GOOS {
+	case "linux":
+		return fyne.NewSize(1050, 680)
+	case "windows":
+		return fyne.NewSize(1150, 760)
+	default: // darwin
+		return fyne.NewSize(1100, 720)
+	}
+}
+
+// minWindowSize returns the minimum resize constraint.
+// Prevents the window from being shrunk so small that content clips.
+func minWindowSize() fyne.Size {
+	return fyne.NewSize(800, 520)
+}
+
+// textSize returns a platform-aware text size. On Windows with ClearType,
+// small text can appear blurry, so we bump the baseline slightly.
+func textSize(base float32) float32 {
+	if runtime.GOOS == "windows" {
+		return base + 1
+	}
+	return base
 }
 
 // ─── GUI struct ───────────────────────────────────────────────────────────────
@@ -238,11 +327,13 @@ func (w *guiLogWriter) Write(p []byte) (int, error) {
 // ─── Entry point ─────────────────────────────────────────────────────────────
 
 func runGUI(cfgPath string, cfg *Config) {
+	initLinuxEnv()
+
 	a := app.NewWithID("com.parkbot.app")
 	a.Settings().SetTheme(isuTheme{})
 	g := &GUI{app: a, cfgPath: cfgPath}
 	g.win = a.NewWindow("ParkBot")
-	g.win.Resize(fyne.NewSize(1100, 720))
+	g.win.Resize(platformWindowSize())
 	g.win.SetFixedSize(false)
 	g.win.SetMaster()
 	g.buildUI(cfg)
