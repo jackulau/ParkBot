@@ -13,10 +13,11 @@ import (
 	"github.com/go-rod/rod/lib/proto"
 )
 
-const (
-	portalURL = "https://ctitt-iastate.cticloudhost.com/TickeTrak.WebPortal/sso/Home/Index"
-	lockFile  = "purchased.lock"
-)
+const portalURL = "https://ctitt-iastate.cticloudhost.com/TickeTrak.WebPortal/sso/Home/Index"
+
+// lockFile is the platform-aware path to the purchase guard file.
+// Initialized via defaultLockFilePath() in config.go.
+var lockFile = defaultLockFilePath()
 
 func checkLock() error {
 	if _, err := os.Stat(lockFile); err == nil {

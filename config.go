@@ -10,6 +10,8 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+const appName = "ParkBot"
+
 type Billing struct {
 	CardNumber string `yaml:"card_number" json:"card_number"`
 	Expiry     string `yaml:"expiry"      json:"expiry"`
@@ -79,9 +81,65 @@ func (c *Config) Save(path string) error {
 	return nil
 }
 
-func defaultChromeProfile() string {
+// appDataDir returns the platform-appropriate directory for ParkBot application
+// data (config, lock files, etc.). It creates the directory if it does not exist.
+//
+//   - macOS:   ~/Library/Application Support/ParkBot
+//   - Windows: %APPDATA%\ParkBot  (roaming app data)
+//   - Linux:   ~/.config/ParkBot
+func appDataDir() string {
+	return appDataDirForOS(runtime.GOOS)
+}
+
+// appDataDirForOS is the testable core of appDataDir. It returns the
+// platform-appropriate application data directory for the given OS string
+// without creating it on disk.
+func appDataDirForOS(goos string) string {
 	home, _ := os.UserHomeDir()
-	switch runtime.GOOS {
+
+	switch goos {
+	case "windows":
+		if appData := os.Getenv("APPDATA"); appData != "" {
+			return filepath.Join(appData, appName)
+		}
+		return filepath.Join(home, "AppData", "Roaming", appName)
+	case "linux":
+		if xdg := os.Getenv("XDG_CONFIG_HOME"); xdg != "" {
+			return filepath.Join(xdg, appName)
+		}
+		return filepath.Join(home, ".config", appName)
+	default: // darwin
+		return filepath.Join(home, "Library", "Application Support", appName)
+	}
+}
+
+// defaultConfigPath returns the platform-appropriate path for the config file.
+// On first run (no config exists yet) the directory is created automatically.
+func defaultConfigPath() string {
+	dir := appDataDir()
+	_ = os.MkdirAll(dir, 0755)
+	return filepath.Join(dir, "config.yaml")
+}
+
+// defaultLockFilePath returns the platform-appropriate path for the purchase
+// lock file (purchased.lock). The parent directory is created if needed.
+func defaultLockFilePath() string {
+	dir := appDataDir()
+	_ = os.MkdirAll(dir, 0755)
+	return filepath.Join(dir, "purchased.lock")
+}
+
+// defaultChromeProfile returns the default Chrome user-data profile directory
+// for the current platform.
+func defaultChromeProfile() string {
+	return chromeProfileForOS(runtime.GOOS)
+}
+
+// chromeProfileForOS is the testable core of defaultChromeProfile.
+func chromeProfileForOS(goos string) string {
+	home, _ := os.UserHomeDir()
+
+	switch goos {
 	case "windows":
 		if local := os.Getenv("LOCALAPPDATA"); local != "" {
 			return filepath.Join(local, "Google", "Chrome", "User Data", "Default")

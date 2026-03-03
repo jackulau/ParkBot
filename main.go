@@ -15,7 +15,7 @@ func main() {
 	log.SetFlags(log.Ltime | log.Lmsgprefix)
 	log.SetPrefix("[ParkBot] ")
 
-	cfgPath := "config.yaml"
+	cfgPath := defaultConfigPath()
 	if len(os.Args) > 1 {
 		cfgPath = os.Args[1]
 	}
