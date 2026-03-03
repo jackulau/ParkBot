@@ -93,3 +93,26 @@ func defaultChromeProfile() string {
 		return filepath.Join(home, "Library", "Application Support", "Google", "Chrome", "Default")
 	}
 }
+
+// NormalizePath converts a user-supplied path to use OS-specific separators.
+// On Windows, forward slashes in paths are replaced with backslashes.
+// This ensures paths entered in the GUI or config file work correctly.
+func NormalizePath(p string) string {
+	return filepath.FromSlash(p)
+}
+
+// DefaultConfigPath returns a sensible default location for the config file.
+// On Windows, it prefers the executable's directory so the config stays
+// alongside the .exe (portable behavior). On other platforms, it uses
+// the current working directory.
+func DefaultConfigPath() string {
+	name := "config.yaml"
+	if runtime.GOOS == "windows" {
+		exe, err := os.Executable()
+		if err == nil {
+			dir := filepath.Dir(exe)
+			return filepath.Join(dir, name)
+		}
+	}
+	return name
+}
