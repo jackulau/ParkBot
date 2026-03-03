@@ -1,4 +1,6 @@
 purchased.lock
 error_screenshot.png
 parkbot
+parkbot-*
 config.yaml
+dist/
